@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import {
   LayoutDashboard,
   KanbanSquare,
   ListChecks,
+  ListTodo,
   CalendarRange,
   Users,
   FolderKanban,
@@ -15,6 +17,7 @@ import {
   FolderGit2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { subscribe, getSnapshot, getServerSnapshot } from "@/lib/client/project-role-store";
 
 function useProjectId() {
   const pathname = usePathname();
@@ -26,11 +29,22 @@ export function Sidebar({ className }: { className?: string }) {
   const pathname = usePathname();
   const projectId = useProjectId();
 
+  // El rol lo publica <SyncProjectRole> desde [projectId]/layout.tsx (ver
+  // lib/client/project-role-store.ts). Mientras no coincide con el
+  // proyecto de la URL actual (recién entrando, o cambiando de proyecto),
+  // se trata como "desconocido" y se ocultan los ítems sensibles al rol
+  // — nunca se muestran de más ni por un instante.
+  const roleState = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const role = roleState.projectId === projectId ? roleState.role : null;
+
   const topLinks = [{ href: "/projects", label: "Mis proyectos", icon: FolderGit2 }];
 
   const projectLinks = projectId
     ? [
         { href: `/projects/${projectId}/dashboard`, label: "Dashboard", icon: LayoutDashboard },
+        ...(role === "OWNER" || role === "MEMBER"
+          ? [{ href: `/projects/${projectId}/my-tasks`, label: "Mis tareas", icon: ListTodo }]
+          : []),
         { href: `/projects/${projectId}/board`, label: "Tablero", icon: KanbanSquare },
         { href: `/projects/${projectId}/tasks`, label: "Tareas", icon: ListChecks },
         { href: `/projects/${projectId}/schedule`, label: "Cronograma", icon: CalendarRange },
@@ -38,7 +52,9 @@ export function Sidebar({ className }: { className?: string }) {
         { href: `/projects/${projectId}/areas`, label: "Áreas", icon: FolderKanban },
         { href: `/projects/${projectId}/documents`, label: "Documentos", icon: FileText },
         { href: `/projects/${projectId}/activity`, label: "Actividad", icon: Activity },
-        { href: `/projects/${projectId}/settings`, label: "Configuración", icon: Settings },
+        ...(role === "OWNER"
+          ? [{ href: `/projects/${projectId}/settings`, label: "Configuración", icon: Settings }]
+          : []),
       ]
     : [];
 

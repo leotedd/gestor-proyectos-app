@@ -1,12 +1,36 @@
 "use client";
 
-import { useTransition } from "react";
-import { X } from "lucide-react";
+import { useState, useTransition } from "react";
+import { X, Copy, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { cancelInvitationAction } from "@/app/actions/invitations";
 import type { InvitationRow } from "@/lib/types/database";
+
+function CopyLinkIconButton({ token }: { token: string }) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label="Copiar enlace de invitación"
+      onClick={async () => {
+        try {
+          const link = `${window.location.origin}/invite/${token}`;
+          await navigator.clipboard.writeText(link);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } catch {
+          // Portapapeles no disponible.
+        }
+      }}
+    >
+      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+    </Button>
+  );
+}
 
 const statusTone: Record<string, "warning" | "success" | "danger" | "neutral"> = {
   PENDING: "warning",
@@ -49,14 +73,17 @@ export function PendingInvitations({
             <Badge tone="primary">{inv.role}</Badge>
             <Badge tone={statusTone[inv.status]}>{statusLabel[inv.status]}</Badge>
             {inv.status === "PENDING" && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Cancelar invitación"
-                onClick={() => startTransition(() => cancelInvitationAction(inv.id, projectId))}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
+              <>
+                <CopyLinkIconButton token={inv.token} />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Cancelar invitación"
+                  onClick={() => startTransition(() => cancelInvitationAction(inv.id, projectId))}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </>
             )}
           </div>
         </div>

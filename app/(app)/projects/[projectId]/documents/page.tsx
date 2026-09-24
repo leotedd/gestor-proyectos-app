@@ -11,8 +11,10 @@ export default async function DocumentsPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { canEdit, canManage } = await getProjectContext(projectId);
-  const attachments = await listProjectAttachments(projectId);
+  const [{ canEdit, canManage, userId }, attachments] = await Promise.all([
+    getProjectContext(projectId),
+    listProjectAttachments(projectId),
+  ]);
 
   return (
     <div className="px-6 py-6 space-y-4">
@@ -26,7 +28,12 @@ export default async function DocumentsPage({
         {canEdit && <UploadDocumentForm projectId={projectId} />}
       </div>
 
-      <DocumentsList projectId={projectId} attachments={attachments} canManage={canManage} />
+      <DocumentsList
+        projectId={projectId}
+        attachments={attachments}
+        canManage={canManage}
+        currentUserId={userId}
+      />
     </div>
   );
 }

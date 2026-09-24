@@ -41,31 +41,25 @@ export const getProjectContext = cache(
   async (projectId: string): Promise<ProjectContext> => {
     const { supabase, user } = await requireUserClient();
 
-    const { data: project, error } = await supabase
-      .from("projects")
-      .select("*")
-      .eq("id", projectId)
-      .maybeSingle();
-
-    if (error || !project) {
-      notFound();
-    }
-
-    const { data: membership } = await supabase
+    // Una sola consulta: la fila de membresía del usuario en ESTE proyecto,
+    // con el proyecto embebido. Sin membresía (o UUID inexistente) → 404.
+    const { data, error } = await supabase
       .from("project_members")
-      .select("role")
+      .select("role, project:projects(*)")
       .eq("project_id", projectId)
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (!membership) {
+    const membership = data as unknown as { role: ProjectRole; project: ProjectRow | null } | null;
+
+    if (error || !membership || !membership.project) {
       notFound();
     }
 
     const role = membership.role;
 
     return {
-      project,
+      project: membership.project,
       role,
       userId: user.id,
       canEdit: canEdit(role),

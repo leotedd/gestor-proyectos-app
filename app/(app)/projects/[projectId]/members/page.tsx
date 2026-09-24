@@ -15,14 +15,17 @@ export default async function MembersPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { canManage } = await getProjectContext(projectId);
 
-  const [members, tasks, areas, invitations] = await Promise.all([
+  // Las invitaciones se piden en paralelo con todo lo demás; RLS ya las limita a
+  // OWNER/ADMIN y aquí se descartan si el rol no puede administrar.
+  const [{ canManage }, members, tasks, areas, allInvitations] = await Promise.all([
+    getProjectContext(projectId),
     listProjectMembers(projectId),
     listProjectTasks(projectId),
     listProjectAreas(projectId),
-    canManage ? listProjectInvitations(projectId) : Promise.resolve([]),
+    listProjectInvitations(projectId),
   ]);
+  const invitations = canManage ? allInvitations : [];
 
   const stats: MemberStat[] = members.map((m) => {
     const assignedTasks = tasks.filter((t) => t.assignee?.id === m.profile.id);
@@ -31,10 +34,11 @@ export default async function MembersPage({
     return {
       id: m.id,
       userId: m.profile.id,
-      name: m.profile.full_name || m.profile.email,
+      name: m.profile.full_name || m.profile.username || m.profile.email,
       email: m.profile.email,
       role: m.role,
       areaId: m.area?.id ?? null,
+      isGuest: m.profile.is_guest,
       assigned,
       completed,
       pending: assigned - completed,

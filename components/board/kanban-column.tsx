@@ -9,14 +9,14 @@ export function KanbanColumn({
   id,
   title,
   tasks,
-  disabled,
+  isTaskDisabled,
   accentClass,
   onTaskClick,
 }: {
   id: TaskStatus;
   title: string;
   tasks: TaskWithRelations[];
-  disabled?: boolean;
+  isTaskDisabled: (task: TaskWithRelations) => boolean;
   accentClass: string;
   onTaskClick: (task: TaskWithRelations) => void;
 }) {
@@ -44,7 +44,7 @@ export function KanbanColumn({
             <TaskCard
               key={task.id}
               task={task}
-              disabled={disabled}
+              disabled={isTaskDisabled(task)}
               onClick={() => onTaskClick(task)}
             />
           ))}

@@ -21,10 +21,12 @@ export function DocumentsList({
   projectId,
   attachments,
   canManage,
+  currentUserId,
 }: {
   projectId: string;
   attachments: AttachmentWithUploader[];
   canManage: boolean;
+  currentUserId: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
@@ -87,7 +89,7 @@ export function DocumentsList({
               >
                 <Download className="h-4 w-4" />
               </Button>
-              {canManage && (
+              {(canManage || doc.uploaded_by === currentUserId) && (
                 <Button
                   variant="ghost"
                   size="icon"

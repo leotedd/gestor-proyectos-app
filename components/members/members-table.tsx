@@ -22,6 +22,7 @@ export interface MemberStat {
   email: string;
   role: ProjectRole;
   areaId: string | null;
+  isGuest: boolean;
   assigned: number;
   completed: number;
   pending: number;
@@ -95,7 +96,14 @@ export function MembersTable({
                   <div className="flex items-center gap-2 min-w-0">
                     <Avatar name={m.name} size="sm" />
                     <div className="min-w-0">
-                      <p className="font-medium text-foreground truncate">{m.name}</p>
+                      <p className="font-medium text-foreground truncate flex items-center gap-1.5">
+                        {m.name}
+                        {m.isGuest && (
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            Invitado
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground truncate">{m.email}</p>
                     </div>
                   </div>

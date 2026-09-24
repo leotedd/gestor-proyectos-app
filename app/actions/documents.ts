@@ -64,7 +64,26 @@ export async function deleteAttachmentAction(
   storagePath: string,
   projectId: string
 ) {
-  const { userId, supabase } = await requireProjectRole(projectId, MANAGER_ROLES);
+  // PROPIETARIO borra cualquier documento; MIEMBRO solo el suyo (la política
+  // de Storage ya lo permite: uploaded_by = auth.uid() OR OWNER/ADMIN).
+  // OBSERVADOR no llega aquí: no está en esta lista de roles permitidos.
+  const { userId, role, supabase } = await requireProjectRole(projectId, [
+    ...MANAGER_ROLES,
+    "MEMBER",
+  ]);
+
+  if (!MANAGER_ROLES.includes(role)) {
+    const { data: attachment } = await supabase
+      .from("attachments")
+      .select("uploaded_by")
+      .eq("id", attachmentId)
+      .eq("project_id", projectId)
+      .maybeSingle();
+
+    if (!attachment || attachment.uploaded_by !== userId) {
+      throw new Error("Solo puedes eliminar los documentos que tú subiste.");
+    }
+  }
 
   await supabase.storage.from(DOCUMENTS_BUCKET).remove([storagePath]);
 

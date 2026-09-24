@@ -12,7 +12,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { deleteTaskAction } from "@/app/actions/tasks";
 import { cn, formatDate, isOverdue } from "@/lib/utils";
 import type { TaskWithRelations } from "@/lib/tasks/types";
-import type { AreaRow } from "@/lib/types/database";
+import type { AreaRow, ProjectRole } from "@/lib/types/database";
 import { ListChecks } from "lucide-react";
 
 export function TasksTable({
@@ -22,6 +22,8 @@ export function TasksTable({
   members,
   canEdit,
   canManage,
+  role,
+  currentUserId,
 }: {
   projectId: string;
   tasks: TaskWithRelations[];
@@ -29,6 +31,8 @@ export function TasksTable({
   members: { id: string; name: string }[];
   canEdit: boolean;
   canManage: boolean;
+  role: ProjectRole;
+  currentUserId: string;
 }) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -189,6 +193,8 @@ export function TasksTable({
           areas={areas}
           members={members}
           task={editingTask}
+          role={role}
+          currentUserId={currentUserId}
           open={!!editingTask}
           onOpenChange={(v) => !v && setEditingTask(null)}
         />

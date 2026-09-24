@@ -13,9 +13,9 @@ export default async function BoardPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { canEdit } = await getProjectContext(projectId);
 
-  const [tasks, areas, members] = await Promise.all([
+  const [{ canEdit, canManage, role, userId }, tasks, areas, members] = await Promise.all([
+    getProjectContext(projectId),
     listProjectTasks(projectId),
     listProjectAreas(projectId),
     listProjectMembers(projectId),
@@ -35,8 +35,14 @@ export default async function BoardPage({
             Arrastra las tarjetas para cambiar el estado de una tarea.
           </p>
         </div>
-        {canEdit && (
-          <TaskFormModal projectId={projectId} areas={areas} members={memberOptions} />
+        {canManage && (
+          <TaskFormModal
+            projectId={projectId}
+            areas={areas}
+            members={memberOptions}
+            role={role}
+            currentUserId={userId}
+          />
         )}
       </div>
 
@@ -46,6 +52,8 @@ export default async function BoardPage({
         areas={areas}
         members={memberOptions}
         canEdit={canEdit}
+        role={role}
+        currentUserId={userId}
       />
     </div>
   );

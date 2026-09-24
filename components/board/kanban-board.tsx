@@ -17,7 +17,9 @@ import { TaskFormModal } from "@/components/tasks/task-form-modal";
 import { Alert } from "@/components/ui/alert";
 import { moveTaskAction } from "@/app/actions/tasks";
 import type { TaskWithRelations } from "@/lib/tasks/types";
-import type { AreaRow } from "@/lib/types/database";
+import type { AreaRow, ProjectRole } from "@/lib/types/database";
+
+const MANAGER_ROLES: ProjectRole[] = ["OWNER", "ADMIN"];
 
 const COLUMNS: { id: TaskWithRelations["status"]; title: string; accent: string }[] = [
   { id: "TODO", title: "Por hacer", accent: "bg-slate-400" },
@@ -32,13 +34,24 @@ export function KanbanBoard({
   areas,
   members,
   canEdit,
+  role,
+  currentUserId,
 }: {
   projectId: string;
   initialTasks: TaskWithRelations[];
   areas: AreaRow[];
   members: { id: string; name: string }[];
   canEdit: boolean;
+  role: ProjectRole;
+  currentUserId: string;
 }) {
+  const isManager = MANAGER_ROLES.includes(role);
+  // MIEMBRO solo puede arrastrar tarjetas que tenga asignadas; OBSERVADOR
+  // (canEdit=false) nunca arrastra ninguna. La Server Action vuelve a
+  // verificar esto: esta función solo controla si el mouse "agarra" la
+  // tarjeta, no es la protección real.
+  const canDragTask = (task: TaskWithRelations) =>
+    canEdit && (isManager || task.assignee?.id === currentUserId);
   const [tasks, setTasks] = useState(initialTasks);
   // Sincroniza el estado local cuando el servidor revalida (nueva navegación
   // o `router.refresh()`) sin usar un Effect: se ajusta durante el render,
@@ -78,10 +91,10 @@ export function KanbanBoard({
   function handleDragEnd(event: DragEndEvent) {
     setActiveTask(null);
     const { active, over } = event;
-    if (!over || !canEdit) return;
+    if (!over) return;
 
     const activeTask = tasks.find((t) => t.id === active.id);
-    if (!activeTask) return;
+    if (!activeTask || !canDragTask(activeTask)) return;
 
     const overIsColumn = COLUMNS.some((c) => c.id === over.id);
     const overTask = tasks.find((t) => t.id === over.id);
@@ -142,7 +155,7 @@ export function KanbanBoard({
               title={col.title}
               accentClass={col.accent}
               tasks={columns[col.id] ?? []}
-              disabled={!canEdit}
+              isTaskDisabled={(task) => !canDragTask(task)}
               onTaskClick={setEditingTask}
             />
           ))}
@@ -159,6 +172,8 @@ export function KanbanBoard({
           areas={areas}
           members={members}
           task={editingTask}
+          role={role}
+          currentUserId={currentUserId}
           open={!!editingTask}
           onOpenChange={(v) => !v && setEditingTask(null)}
         />

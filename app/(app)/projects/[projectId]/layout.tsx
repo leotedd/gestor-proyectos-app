@@ -1,6 +1,7 @@
 import { Eye } from "lucide-react";
 import { getProjectContext } from "@/lib/projects/access";
 import { RoleBadge, Badge } from "@/components/ui/badge";
+import { SyncProjectRole } from "@/components/layout/sync-project-role";
 
 const statusLabel: Record<string, string> = {
   ACTIVE: "Activo",
@@ -21,6 +22,7 @@ export default async function ProjectLayout({
 
   return (
     <div className="flex flex-col min-h-full">
+      <SyncProjectRole projectId={projectId} role={role} />
       <div className="border-b border-border bg-surface px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>

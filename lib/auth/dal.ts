@@ -4,32 +4,56 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { User } from "@supabase/supabase-js";
 import type { ProfileRow } from "@/lib/types/database";
 
+export interface AuthUser {
+  id: string;
+  email?: string;
+  is_anonymous?: boolean;
+}
+
 /**
- * Data Access Layer de autenticación. `cache()` deduplica la llamada dentro
- * de un mismo render (varios componentes pueden pedir el usuario sin costo
- * extra de red).
+ * Identidad de la petición actual, resuelta UNA sola vez por request
+ * (`cache()` deduplica entre layouts, páginas y acciones).
+ *
+ * Usa `getClaims()`: verifica la firma del JWT localmente con las claves
+ * públicas asimétricas del proyecto (JWKS, cacheadas en memoria), sin viaje
+ * de red al servidor de Auth en cada navegación. Una firma o payload alterado
+ * se rechaza. Es la misma garantía que usa RLS: PostgREST también valida el
+ * JWT por firma. Lo único que no detecta es una sesión revocada antes de que
+ * expire el JWT (por defecto 1 h), igual que RLS.
  */
-export const getCurrentUser = cache(async () => {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+const getRequestAuth = cache(
+  async (): Promise<{ supabase: SupabaseClient; user: AuthUser | null }> => {
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getClaims();
+    const claims = data?.claims;
+
+    if (error || !claims?.sub) {
+      return { supabase, user: null };
+    }
+
+    return {
+      supabase,
+      user: {
+        id: claims.sub,
+        email: typeof claims.email === "string" && claims.email ? claims.email : undefined,
+        is_anonymous: claims.is_anonymous === true,
+      },
+    };
+  }
+);
+
+export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
+  const { user } = await getRequestAuth();
   return user;
 });
 
 export const getCurrentProfile = cache(async (): Promise<ProfileRow | null> => {
-  const user = await getCurrentUser();
+  const { supabase, user } = await getRequestAuth();
   if (!user) return null;
 
-  const supabase = await createClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .single();
+  const { data } = await supabase.from("profiles").select("*").eq("id", user.id).single();
 
   return data;
 });
@@ -53,31 +77,17 @@ export async function requireProfile(): Promise<ProfileRow> {
 }
 
 /**
- * Igual que `requireUser()`, pero devuelve el usuario resuelto por el MISMO
- * cliente de Supabase que se debe usar a continuación para la mutación o
- * consulta.
- *
- * Importante: no reutilices `requireUser()` (que crea su propio cliente
- * internamente vía `getCurrentUser`) seguido de un `createClient()` aparte
- * para la query real. Aunque `@supabase/ssr` recarga la sesión desde las
- * cookies en cada request sin importar la instancia, mezclar dos clientes
- * distintos para "quién soy" y "la operación" no aporta nada, duplica una
- * llamada de red a Supabase Auth y dificulta diagnosticar problemas de RLS
- * como "new row violates row-level security policy": si `auth.getUser()`
- * falla en el cliente que realmente ejecuta el INSERT/UPDATE, lo notamos
- * aquí con un mensaje claro en vez de un error crudo de Postgres.
+ * Devuelve el usuario y el MISMO cliente de Supabase que debe usarse para la
+ * consulta o mutación siguiente (así `owner_id`/`created_by` y el `auth.uid()`
+ * que evalúa RLS provienen de la misma sesión). Deduplicado por request.
  */
 export async function requireUserClient(): Promise<{
   supabase: SupabaseClient;
-  user: User;
+  user: AuthUser;
 }> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
+  const { supabase, user } = await getRequestAuth();
 
-  if (error || !user) {
+  if (!user) {
     redirect("/login");
   }
 

@@ -12,9 +12,9 @@ export default async function AreasPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { canManage } = await getProjectContext(projectId);
 
-  const [areas, tasks] = await Promise.all([
+  const [{ canManage }, areas, tasks] = await Promise.all([
+    getProjectContext(projectId),
     listProjectAreas(projectId),
     listProjectTasks(projectId),
   ]);

@@ -12,6 +12,8 @@ export interface ProfileRow {
   full_name: string;
   email: string;
   avatar_url: string | null;
+  username: string | null;
+  is_guest: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -105,7 +107,17 @@ export interface InvitationRow {
   status: InvitationStatus;
   expires_at: string;
   invited_by: string | null;
+  accepted_at: string | null;
   created_at: string;
+}
+
+export interface InvitationPreview {
+  project_name: string;
+  project_key: string;
+  role: ProjectRole;
+  email: string;
+  status: InvitationStatus;
+  expires_at: string;
 }
 
 export interface ActivityLogRow {
@@ -209,6 +221,14 @@ export interface Database {
       has_project_role: {
         Args: { p_project_id: string; p_roles: ProjectRole[] };
         Returns: boolean;
+      };
+      get_invitation_preview: {
+        Args: { p_token: string };
+        Returns: InvitationPreview[];
+      };
+      accept_invitation_by_token: {
+        Args: { p_token: string; p_full_name: string; p_username?: string | null };
+        Returns: string;
       };
     };
     Enums: {

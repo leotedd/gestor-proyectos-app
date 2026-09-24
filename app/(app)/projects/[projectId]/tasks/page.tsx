@@ -4,6 +4,7 @@ import { listProjectAreas } from "@/lib/areas/queries";
 import { listProjectMembers } from "@/lib/members/queries";
 import { TasksTable } from "@/components/tasks/tasks-table";
 import { TaskFormModal } from "@/components/tasks/task-form-modal";
+import { TaskLinksViewer } from "@/components/tasks/task-links-section";
 
 export const metadata = { title: "Tareas" };
 
@@ -13,9 +14,9 @@ export default async function TasksPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { canEdit, canManage } = await getProjectContext(projectId);
 
-  const [tasks, areas, members] = await Promise.all([
+  const [{ canEdit, canManage, role, userId }, tasks, areas, members] = await Promise.all([
+    getProjectContext(projectId),
     listProjectTasks(projectId),
     listProjectAreas(projectId),
     listProjectMembers(projectId),
@@ -35,8 +36,14 @@ export default async function TasksPage({
             {tasks.length} tarea{tasks.length !== 1 ? "s" : ""} en este proyecto.
           </p>
         </div>
-        {canEdit && (
-          <TaskFormModal projectId={projectId} areas={areas} members={memberOptions} />
+        {canManage && (
+          <TaskFormModal
+            projectId={projectId}
+            areas={areas}
+            members={memberOptions}
+            role={role}
+            currentUserId={userId}
+          />
         )}
       </div>
 
@@ -47,7 +54,12 @@ export default async function TasksPage({
         members={memberOptions}
         canEdit={canEdit}
         canManage={canManage}
+        role={role}
+        currentUserId={userId}
       />
+      {!canEdit && tasks.length > 0 && (
+        <TaskLinksViewer projectId={projectId} tasks={tasks.map(({ id, code, title }) => ({ id, code, title }))} />
+      )}
     </div>
   );
 }

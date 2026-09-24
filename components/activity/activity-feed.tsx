@@ -10,6 +10,7 @@ import {
   FolderCog,
   Archive,
   Trash2,
+  Link2,
   Activity as ActivityIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -39,6 +40,9 @@ const ACTION_META: Record<string, { icon: LucideIcon; label: string }> = {
   "invitation.accepted": { icon: UserPlus, label: "se unió al proyecto" },
   "attachment.added": { icon: FileUp, label: "agregó un documento" },
   "attachment.deleted": { icon: FileMinus, label: "eliminó un documento" },
+  "task_link.created": { icon: Link2, label: "agregó un enlace a una tarea" },
+  "task_link.updated": { icon: Link2, label: "editó un enlace de una tarea" },
+  "task_link.deleted": { icon: Link2, label: "eliminó un enlace de una tarea" },
 };
 
 export function ActivityFeed({ logs }: { logs: ActivityLogWithActor[] }) {

@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { CalendarRange, ArrowRight } from "lucide-react";
+import { CalendarRange, ArrowRight, Share2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge, RoleBadge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { InviteMemberModal } from "@/components/members/invite-member-modal";
 import { formatDate } from "@/lib/utils";
 import type { UserProjectSummary } from "@/lib/projects/queries";
 
@@ -47,6 +49,19 @@ export function ProjectCard({ project }: { project: UserProjectSummary }) {
             <Badge tone={statusTone[project.status]}>{statusLabel[project.status]}</Badge>
           </div>
         </div>
+
+        {project.role === "OWNER" && (
+          <InviteMemberModal
+            projectId={project.id}
+            title="Compartir proyecto"
+            description={`Invita a alguien a "${project.name}" y define qué podrá hacer.`}
+            trigger={
+              <Button variant="outline" size="sm" type="button" className="w-full">
+                <Share2 className="h-3.5 w-3.5" /> Compartir
+              </Button>
+            }
+          />
+        )}
       </Card>
     </Link>
   );

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { getCurrentUser } from "@/lib/auth/dal";
 import type { ProjectRole, ProjectRow } from "@/lib/types/database";
 
 export interface UserProjectSummary extends ProjectRow {
@@ -9,11 +10,9 @@ export interface UserProjectSummary extends ProjectRow {
 
 /** Lista los proyectos donde el usuario actual es miembro (RLS ya filtra). */
 export async function listUserProjects(): Promise<UserProjectSummary[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getCurrentUser();
   if (!user) return [];
+  const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("project_members")

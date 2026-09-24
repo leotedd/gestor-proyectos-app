@@ -73,14 +73,45 @@ export const updateTaskSchema = createTaskSchema
   .partial()
   .extend({ taskId: z.uuid() });
 
+/**
+ * Campos que un MIEMBRO puede modificar en una tarea que tiene asignada:
+ * estado, progreso y fecha límite. Nada más. `position` no se valida aquí
+ * porque solo la mueve el Kanban (moveTaskAction), no este formulario.
+ */
+export const updateTaskAsMemberSchema = z.object({
+  taskId: z.uuid(),
+  status: z.enum(taskStatuses),
+  progress: z.coerce.number().min(0).max(100).default(0),
+  dueDate: z.string().optional().nullable(),
+});
+
 export const createAreaSchema = z.object({
   projectId: z.uuid(),
   name: z.string().trim().min(2, { error: "El nombre es obligatorio." }),
   description: z.string().trim().max(1000).optional().default(""),
 });
 
+// Roles que se pueden invitar desde la interfaz: PROPIETARIO no se invita
+// (0007 ya lo bloquea también en base de datos) y ADMIN se mantiene
+// técnicamente en el sistema pero no se ofrece ni se acepta al invitar.
+export const invitableRoles = ["MEMBER", "VIEWER"] as const;
+
 export const inviteMemberSchema = z.object({
   projectId: z.uuid(),
   email: emailSchema,
-  role: z.enum(projectRoles).default("MEMBER"),
+  role: z.enum(invitableRoles).default("MEMBER"),
+});
+
+export const acceptGuestInvitationSchema = z.object({
+  token: z.uuid(),
+  fullName: z.string().trim().min(2, { error: "Ingresa tu nombre completo." }),
+  email: emailSchema,
+  username: z
+    .string()
+    .trim()
+    .min(2, { error: "Debe tener al menos 2 caracteres." })
+    .max(40)
+    .optional()
+    .or(z.literal(""))
+    .transform((v) => (v ? v : undefined)),
 });

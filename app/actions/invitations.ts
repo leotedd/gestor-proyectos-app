@@ -5,10 +5,16 @@ import { redirect } from "next/navigation";
 import { requireUserClient } from "@/lib/auth/dal";
 import { requireProjectRole, MANAGER_ROLES } from "@/lib/projects/access";
 import { logActivity } from "@/lib/activity";
-import { inviteMemberSchema } from "@/lib/validations";
+import { inviteMemberSchema, acceptGuestInvitationSchema } from "@/lib/validations";
 import { sendInvitationEmail } from "@/lib/email/resend";
+import { createClient } from "@/lib/supabase/server";
 
-export type ActionState = { error?: string; success?: string } | null;
+export type ActionState = { error?: string; success?: string; link?: string } | null;
+export type GuestActionState = { error?: string } | null;
+
+function siteUrl() {
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+}
 
 function firstIssue(error: { issues: { message: string }[] }) {
   return error.issues[0]?.message ?? "Datos inválidos.";
@@ -85,23 +91,25 @@ export async function createInvitationAction(
   });
 
   revalidatePath(`/projects/${parsed.data.projectId}/settings`);
+  revalidatePath(`/projects/${parsed.data.projectId}/members`);
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+  const acceptUrl = `${siteUrl()}/invite/${invitation.token}`;
   const result = await sendInvitationEmail({
     to: parsed.data.email,
     projectName: project?.name ?? "el proyecto",
     role: parsed.data.role,
     inviterName: inviter?.full_name || "Un administrador",
-    acceptUrl: `${siteUrl}/invite/${invitation.token}`,
+    acceptUrl,
   });
 
   if (!result.sent) {
     return {
       success: `Invitación creada para ${parsed.data.email}. ${result.reason ?? ""}`,
+      link: acceptUrl,
     };
   }
 
-  return { success: `Invitación enviada a ${parsed.data.email}.` };
+  return { success: `Invitación enviada a ${parsed.data.email}.`, link: acceptUrl };
 }
 
 export async function cancelInvitationAction(invitationId: string, projectId: string) {
@@ -130,60 +138,105 @@ export async function acceptInvitationAction(
   _prev: ActionState,
   formData: FormData
 ): Promise<ActionState> {
-  const token = String(formData.get("token") ?? "");
-  const { supabase, user } = await requireUserClient();
+  const parsedToken = acceptGuestInvitationSchema.shape.token.safeParse(formData.get("token"));
+  if (!parsedToken.success) return { error: "Invitación no encontrada." };
 
-  const { data: invitation } = await supabase
-    .from("invitations")
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
+  const { supabase } = await requireUserClient();
 
-  if (!invitation) return { error: "Invitación no encontrada." };
+  // La validación real (token, estado, expiración, correo de la cuenta,
+  // membresía y marcado ACCEPTED) ocurre atómicamente en PostgreSQL.
+  // Para una cuenta real, el RPC no modifica su profile.
+  const { data: projectId, error } = await supabase.rpc("accept_invitation_by_token", {
+    p_token: parsedToken.data,
+    p_full_name: "",
+    p_username: null,
+  });
+
+  if (error || !projectId) {
+    return { error: error?.message ?? "No se pudo aceptar la invitación." };
+  }
+
+  revalidatePath("/projects");
+  redirect(`/projects/${projectId}/dashboard`);
+}
+
+/**
+ * Acepta una invitación SIN contraseña. Si ya existe una sesión anónima
+ * activa (el invitado ya había aceptado otra invitación antes), la
+ * reutiliza para sumar esta segunda membresía. Si no hay ninguna sesión,
+ * crea una sesión anónima real de Supabase Auth (así RLS sigue protegiendo
+ * todo sin excepciones). Si hay una sesión de una cuenta REAL (con
+ * contraseña), se rechaza: esa persona debe cerrar sesión primero — la
+ * página `/invite/[token]` ya filtra este caso antes de mostrar el form.
+ */
+export async function acceptInvitationAsGuestAction(
+  _prev: GuestActionState,
+  formData: FormData
+): Promise<GuestActionState> {
+  const parsed = acceptGuestInvitationSchema.safeParse({
+    token: formData.get("token"),
+    fullName: formData.get("fullName"),
+    email: formData.get("email"),
+    username: formData.get("username") ?? "",
+  });
+
+  if (!parsed.success) return { error: firstIssue(parsed.error) };
+
+  const supabase = await createClient();
+
+  const { data: preview, error: previewError } = await supabase.rpc("get_invitation_preview", {
+    p_token: parsed.data.token,
+  });
+
+  if (previewError || !preview || preview.length === 0) {
+    return { error: "Invitación no encontrada." };
+  }
+  const invitation = preview[0];
+
   if (invitation.status !== "PENDING") {
     return { error: "Esta invitación ya no está disponible." };
   }
   if (new Date(invitation.expires_at).getTime() < Date.now()) {
-    await supabase.from("invitations").update({ status: "EXPIRED" }).eq("id", invitation.id);
     return { error: "Esta invitación ha expirado." };
   }
-  if (invitation.email.toLowerCase() !== (user.email ?? "").toLowerCase()) {
+  if (invitation.email.toLowerCase() !== parsed.data.email.toLowerCase()) {
+    return { error: `Esta invitación es para ${invitation.email}.` };
+  }
+
+  const {
+    data: { user: existingUser },
+  } = await supabase.auth.getUser();
+
+  if (existingUser && !existingUser.is_anonymous) {
     return {
-      error: `Esta invitación es para ${invitation.email}. Inicia sesión con ese correo.`,
+      error: "Ya tienes una sesión iniciada con una cuenta. Cierra sesión primero.",
     };
   }
 
-  const { error: memberError } = await supabase.from("project_members").upsert(
-    {
-      project_id: invitation.project_id,
-      user_id: user.id,
-      role: invitation.role,
-      invited_by: invitation.invited_by,
-    },
-    { onConflict: "project_id,user_id", ignoreDuplicates: true }
-  );
-
-  if (memberError) {
-    if (memberError.code === "42501") {
+  if (!existingUser) {
+    const { data, error: anonError } = await supabase.auth.signInAnonymously();
+    if (anonError || !data.user) {
       return {
         error:
-          "No se pudo unirte al proyecto por una política de seguridad desactualizada. " +
-          "Pide a un administrador que ejecute la migración SQL más reciente en Supabase.",
+          anonError?.message ??
+          "No se pudo crear tu sesión temporal. Verifica que el proveedor 'Anonymous' esté habilitado en Supabase.",
       };
     }
-    return { error: memberError.message };
   }
 
-  await supabase.from("invitations").update({ status: "ACCEPTED" }).eq("id", invitation.id);
+  const { data: projectId, error: acceptError } = await supabase.rpc(
+    "accept_invitation_by_token",
+    {
+      p_token: parsed.data.token,
+      p_full_name: parsed.data.fullName,
+      p_username: parsed.data.username ?? null,
+    }
+  );
 
-  await logActivity(supabase, {
-    projectId: invitation.project_id,
-    userId: user.id,
-    action: "invitation.accepted",
-    entityType: "invitation",
-    entityId: invitation.id,
-  });
+  if (acceptError || !projectId) {
+    return { error: acceptError?.message ?? "No se pudo aceptar la invitación." };
+  }
 
   revalidatePath("/projects");
-  redirect(`/projects/${invitation.project_id}/dashboard`);
+  redirect(`/projects/${projectId}/dashboard`);
 }

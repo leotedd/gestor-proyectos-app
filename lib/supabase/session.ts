@@ -46,9 +46,10 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() valida la firma del JWT localmente (sin viaje de red a Auth
+  // en cada navegación) y refresca la sesión si el token expiró.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
 

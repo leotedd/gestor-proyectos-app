@@ -3,8 +3,7 @@ import { listUserProjects } from "@/lib/projects/queries";
 import { AppShell } from "@/components/layout/app-shell";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const profile = await requireProfile();
-  const projects = await listUserProjects();
+  const [profile, projects] = await Promise.all([requireProfile(), listUserProjects()]);
 
   return (
     <AppShell profile={profile} projects={projects}>
